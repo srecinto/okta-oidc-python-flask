@@ -29,10 +29,13 @@ def get_oauth_token(oauth_code):
 def get_session_token(username, password):
     print "get_session_token()"
     okta_util = OktaUtil(request.headers, config.okta)
+    session_token = None
 
     authn_reponse_json = okta_util.get_session_token(username, password)
+    if "sessionToken" in authn_reponse_json:
+        session_token = authn_reponse_json["sessionToken"]
 
-    return authn_reponse_json["sessionToken"]
+    return session_token
 
 
 def handle_login(form_data):
