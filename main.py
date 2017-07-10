@@ -1,10 +1,8 @@
 import os
 import config
-import requests
-import json
-import base64
 
-from flask import Flask, request, send_from_directory, redirect, make_response, session, render_template
+from flask import Flask, request, send_from_directory, redirect, make_response, render_template
+from utils.rest import OktaUtil
 
 """
 GLOBAL VARIABLES ########################################################################################################
@@ -18,113 +16,21 @@ UTILS ##########################################################################
 """
 
 
-def get_encoded_auth():
-    print "get_encoded_auth()"
-    auth_raw = "{client_id}:{client_secret}".format(
-        client_id=config.okta_config["oidc_client_id"],
-        client_secret=config.okta_config["oidc_client_secret"]
-    )
-
-    print "auth_raw: {0}".format(auth_raw)
-    encoded_auth = base64.b64encode(auth_raw)
-    print "encoded_auth: {0}".format(encoded_auth)
-
-    return encoded_auth
-
-
-def execute_post(url, body, headers):
-    print "execute_post()"
-    print "url: {0}".format(url)
-    print "body: {0}".format(body)
-    print "headers: {0}".format(headers)
-
-    rest_response = requests.post(url, headers=headers, json=body)
-    response_json = rest_response.json()
-
-    print "json: {0}".format(json.dumps(response_json, indent=4, sort_keys=True))
-    return response_json
-
-
-def create_oidc_auth_code_url(session_token):
-    print "create_oidc_auth_code_url"
-    print "session_token: {0}".format(session_token)
-    session_option = ""
-
-    if (session_token):
-        session_option = "&sessionToken={session_token}".format(session_token=session_token)
-
-    url = (
-        "{host}/oauth2/v1/authorize?"
-        "response_type=code&"
-        "client_id={clint_id}&"
-        "redirect_uri={redirect_uri}&"
-        "state=af0ifjsldkj&"
-        "nonce=n-0S6_WzA2Mj&"
-        "response_mode=form_post&"
-        "prompt=none&"
-        "scope=openid"
-        "{session_option}"
-    ).format(
-        host=config.okta_config["org_host"],
-        clint_id=config.okta_config["oidc_client_id"],
-        redirect_uri=config.okta_config["redirect_uri"],
-        session_option=session_option
-    )
-    return url
-
-
 def get_oauth_token(oauth_code):
     print "get_oauth_token()"
-    print "oauth_code: {0}".format(oauth_code)
-    url = (
-        "{host}/oauth2/v1/token?"
-        "grant_type=authorization_code&"
-        "code={code}&"
-        "redirect_uri={redirect_uri}"
-    ).format(
-        host=config.okta_config["org_host"],
-        code=oauth_code,
-        redirect_uri=config.okta_config["redirect_uri"]
-    )
+    okta_util = OktaUtil(request.headers, config.okta)
 
-    headers = {
-        "Accept": "application/json",
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Authorization": "Basic {encoded_auth}".format(encoded_auth=get_encoded_auth())
-    }
-
-    body = {
-        "authorization_code": oauth_code
-    }
-
-    oauth_token_response_json = execute_post(url, body, headers)
+    oauth_token_response_json = okta_util.get_oauth_token(oauth_code, config.okta["redirect_uri"])
+    print "oauth_token_response_json: {0}".format(oauth_token_response_json)
 
     return oauth_token_response_json["access_token"]
 
 
 def get_session_token(username, password):
-    print("get_session_token()")
-    url = "{host}/api/v1/authn".format(host=config.okta_config["org_host"])
+    print "get_session_token()"
+    okta_util = OktaUtil(request.headers, config.okta)
 
-    header = {
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-        "User-Agent": request.headers["User-Agent"],
-        "X-Forwarded-For": request.headers["X-Forwarded-For"],
-        "X-Forwarded-Port": request.headers["X-Forwarded-Port"],
-        "X-Forwarded-Proto": request.headers["X-Forwarded-Proto"]
-    }
-
-    body = {
-        "username": username,
-        "password": password
-    }
-
-    authn_reponse_json = execute_post(url, body, header)
-    print "authn_reponse_json: {0}".format(authn_reponse_json)
-
-    if("errorSummary" in authn_reponse_json):
-        raise ValueError(authn_reponse_json["errorSummary"])
+    authn_reponse_json = okta_util.get_session_token(username, password)
 
     return authn_reponse_json["sessionToken"]
 
@@ -145,13 +51,73 @@ def handle_login(form_data):
 
     # Use Session Token to generatet OIDC Auth Code URL
     if(session_token):
-        oidc_auth_code_url = create_oidc_auth_code_url(session_token)
+        okta_util = OktaUtil(request.headers, config.okta)
+        oidc_auth_code_url = okta_util.create_oidc_auth_code_url(
+            session_token,
+            config.okta["oidc_client_id"],
+            config.okta["redirect_uri"])
+
         print "url: {0}".format(oidc_auth_code_url)
         # redirect to User Auth Code URL to Get OIDC Code
         return redirect(oidc_auth_code_url)
 
     else:
-        return serve_static_html("index.html")
+        return make_response(redirect("/"))
+
+
+def get_current_user_token():
+    print "get_current_user_token()"
+    user_results_json = None
+    okta_util = OktaUtil(request.headers, config.okta)
+
+    if("token" in request.cookies):
+        introspection_results_json = okta_util.introspect_oauth_token(request.cookies.get("token"))
+
+        if("active" in introspection_results_json):
+            if(introspection_results_json["active"]):
+                print "Has active token"
+                user_results_json = {
+                    "active": introspection_results_json["active"],
+                    "username": introspection_results_json["username"],
+                    "uid": introspection_results_json["uid"]
+                }
+            else:
+                print "Has inactive token"
+        else:
+            print "has inactive token error"
+            check_okta_session_url = okta_util.create_oidc_auth_code_url(None, config.okta["oidc_client_id"], config.okta["redirect_uri"])
+            user_results_json = {
+                "active": False,
+                "redirect_url": check_okta_session_url
+            }
+    else:
+        print "has no token"
+        check_okta_session_url = okta_util.create_oidc_auth_code_url(None, config.okta["oidc_client_id"], config.okta["redirect_uri"])
+        user_results_json = {
+            "active": False,
+            "redirect_url": check_okta_session_url
+        }
+
+    if(not user_results_json):
+        print "has no token default"
+        user_results_json = {
+            "active": False
+        }
+
+    return user_results_json
+
+
+def get_current_user(user_token_data):
+    print "get_current_user()"
+    current_user = None
+
+    if "uid" in user_token_data:
+        user_id = user_token_data["uid"]
+        print "Looking up user by id: {0}".format(user_id)
+        okta_util = OktaUtil(request.headers, config.okta)
+        current_user = okta_util.get_user(user_id)
+
+    return current_user
 
 
 """
@@ -159,16 +125,27 @@ ROUTES #########################################################################
 """
 
 
-@app.route("/", methods=["GET"])
-def root():
-    root_dir = os.path.dirname(os.path.realpath(__file__))
-    return send_from_directory(os.path.join(root_dir, 'static'), "index.html")
-
-
 @app.route('/<path:filename>')
 def serve_static_html(filename):
+    print "serve_static_html('{0}')".format(filename)
     root_dir = os.path.dirname(os.path.realpath(__file__))
     return send_from_directory(os.path.join(root_dir, 'static'), filename)
+
+
+@app.route("/", methods=["GET"])
+def root():
+    print "root()"
+
+    user = None
+    current_token_info = get_current_user_token()
+    print "current_token_info: {0}".format(current_token_info)
+    if current_token_info["active"]:
+        user = get_current_user(current_token_info)
+        print "user: {0}".format(user)
+    elif "redirect_url" in current_token_info:
+        return redirect(current_token_info["redirect_url"])
+
+    return render_template("index.html", current_token_info=current_token_info, user=user)
 
 
 @app.route("/login", methods=["POST"])
@@ -191,7 +168,7 @@ def oidc():
         print "oidc_code: {0}".format(oidc_code)
         oauth_token = get_oauth_token(oidc_code)
 
-    response = make_response(redirect("{0}/".format(config.okta_config["app_host"])))
+    response = make_response(redirect("{0}/".format(config.okta["app_host"])))
     response.set_cookie('token', oauth_token)
     return response
 
@@ -201,5 +178,5 @@ MAIN ###########################################################################
 """
 if __name__ == "__main__":
     # This is to run on c9.io.. you may need to change or make your own runner
-    print "okta_config: {0}".format(config.okta_config)
+    print "okta_config: {0}".format(config.okta)
     app.run(host=os.getenv("IP", "0.0.0.0"), port=int(os.getenv("PORT", 8080)))
