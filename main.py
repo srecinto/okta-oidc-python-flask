@@ -145,7 +145,12 @@ def root():
     elif "redirect_url" in current_token_info:
         return redirect(current_token_info["redirect_url"])
 
-    return render_template("index.html", current_token_info=current_token_info, user=user)
+    response = make_response(render_template("index.html", current_token_info=current_token_info, user=user))
+    if "token" in request.cookies:
+        if request.cookies["token"] == "NO_TOKEN":
+            response.set_cookie('token', "")
+
+    return response
 
 
 @app.route("/login", methods=["POST"])
