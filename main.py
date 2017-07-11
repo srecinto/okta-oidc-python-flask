@@ -169,14 +169,18 @@ def oidc():
     print "oidc()"
     print request.form
 
+    redirect_url = ""
+
     if("error" in request.form):
         oauth_token = "NO_TOKEN"
+        redirect_url = config.okta["app_host"]
     else:
         oidc_code = request.form["code"]
         print "oidc_code: {0}".format(oidc_code)
         oauth_token = get_oauth_token(oidc_code)
+        redirect_url = config.okta["post_oidc_redirect"]
 
-    response = make_response(redirect("{0}/".format(config.okta["app_host"])))
+    response = make_response(redirect(redirect_url))
     response.set_cookie('token', oauth_token)
     return response
 
