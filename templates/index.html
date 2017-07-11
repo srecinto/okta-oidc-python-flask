@@ -9,6 +9,7 @@
         <div>
             <h1>Welcome {{user.profile.firstName}} {{user.profile.lastName}}</h1>
             <div>You are now logged in</div>
+            <div><a href="/logout">Logout</a></div>
         </div>
         {% else %}
         <form id='login-form' action="/login" method='post'>

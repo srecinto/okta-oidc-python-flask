@@ -68,6 +68,21 @@ def handle_login(form_data):
         return make_response(redirect("/"))
 
 
+def handle_logout():
+    print "handle_logout()"
+    redirect_url = "{host}/login/signout?fromURI={redirect_path}".format(
+        host = config.okta["org_host"],
+        redirect_path = config.okta["app_host"]
+    )
+
+    print "redirect_url: {0}".format(redirect_url)
+
+    response = make_response(redirect(redirect_url))
+    response.set_cookie('token', "")
+
+    return response
+
+
 def get_current_user_token():
     print "get_current_user_token()"
     user_results_json = None
@@ -162,6 +177,13 @@ def login():
     print request.form
 
     return handle_login(request.form)
+
+
+@app.route("/logout", methods=["GET"])
+def logout():
+    print "logout()"
+
+    return handle_logout()
 
 
 @app.route("/oidc", methods=["POST"])
