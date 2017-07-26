@@ -1,19 +1,19 @@
 <html>
     <head>
-        <title>Okta OIDC Python Flask</title>
+        <title>Internal</title>
         <link rel="stylesheet" type="text/css" href="css/site.css">
     </head>
     <body>
 
         {% if current_token_info.active %}
         <div>
-            <h1>Welcome {{user.profile.firstName}} {{user.profile.lastName}}</h1>
+            <h1>Internal Welcome {{user.profile.firstName}} {{user.profile.lastName}}</h1>
             <div>You are now logged in</div>
             <div><a href="/logout">Logout</a></div>
         </div>
         {% else %}
         <form id='login-form' action="/login" method='post'>
-            <h1>Login</h1>
+            <h1>Internal Login</h1>
             <input type="text" name="username" placeholder="Username" required>
             <input type="password" name="password" placeholder="Password" required>
             <button type='submit'>Login</button>

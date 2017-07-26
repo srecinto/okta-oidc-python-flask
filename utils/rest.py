@@ -16,6 +16,7 @@ class OktaUtil:
     OKTA_OAUTH_HEADERS = {}
     OIDC_CLIENT_ID = None
     OIDC_CLIENT_SECRET = None
+    AUTH_SERVER_ID = None
 
     def __init__(self, headers, okta_config):
         # This is to supress the warnings for the older version
@@ -25,6 +26,9 @@ class OktaUtil:
         self.REST_TOKEN = okta_config["api_token"]
         self.OIDC_CLIENT_ID = okta_config["oidc_client_id"]
         self.OIDC_CLIENT_SECRET = okta_config["oidc_client_secret"]
+        if "auth_server_id" in okta_config:
+            self.AUTH_SERVER_ID = okta_config["auth_server_id"]
+            print "HAS AUTH SERVER: {0}".format(self.AUTH_SERVER_ID)
 
         self.OKTA_HEADERS = {
             "Accept": "application/json",
@@ -77,7 +81,14 @@ class OktaUtil:
 
     def revoke_token(self, token):
         print("revoke_token()")
-        url = "{host}/oauth2/v1/revoke?token={token}".format(host=self.REST_HOST, token=token)
+        auth_server = ""
+        if self.AUTH_SERVER_ID:
+            auth_server = "/{0}".format(self.AUTH_SERVER_ID)
+
+        url = "{host}/oauth2{auth_server}/v1/revoke?token={token}".format(
+            host=self.REST_HOST,
+            auth_server=auth_server,
+            token=token)
         body = {}
 
         return self.execute_post(url, body)
@@ -131,7 +142,16 @@ class OktaUtil:
 
     def introspect_oauth_token(self, oauth_token):
         print "introspect_oauth_token()"
-        url = "{host}/oauth2/v1/introspect?token={token}".format(host=self.REST_HOST, token=oauth_token)
+
+        auth_server = ""
+
+        if self.AUTH_SERVER_ID:
+            auth_server = "/{0}".format(self.AUTH_SERVER_ID)
+
+        url = "{host}/oauth2{auth_server}/v1/introspect?token={token}".format(
+            host=self.REST_HOST,
+            auth_server=auth_server,
+            token=oauth_token)
         body = {}
 
         return self.execute_post(url, body, self.OKTA_OAUTH_HEADERS)
@@ -139,13 +159,19 @@ class OktaUtil:
     def get_oauth_token(self, oauth_code, redirect_uri):
         print "get_oauth_token()"
         print "oauth_code: {0}".format(oauth_code)
+        auth_server = ""
+
+        if self.AUTH_SERVER_ID:
+            auth_server = "/{0}".format(self.AUTH_SERVER_ID)
+
         url = (
-            "{host}/oauth2/v1/token?"
+            "{host}/oauth2{auth_server}/v1/token?"
             "grant_type=authorization_code&"
             "code={code}&"
             "redirect_uri={redirect_uri}"
         ).format(
             host=self.REST_HOST,
+            auth_server=auth_server,
             code=oauth_code,
             redirect_uri=redirect_uri
         )
@@ -367,12 +393,16 @@ class OktaUtil:
         print "create_oidc_auth_code_url"
         print "session_token: {0}".format(session_token)
         session_option = ""
+        auth_server = ""
 
         if (session_token):
             session_option = "&sessionToken={session_token}".format(session_token=session_token)
 
+        if self.AUTH_SERVER_ID:
+            auth_server = "/{0}".format(self.AUTH_SERVER_ID)
+
         url = (
-            "{host}/oauth2/v1/authorize?"
+            "{host}/oauth2{auth_server}/v1/authorize?"
             "response_type=code&"
             "client_id={clint_id}&"
             "redirect_uri={redirect_uri}&"
@@ -384,6 +414,7 @@ class OktaUtil:
             "{session_option}"
         ).format(
             host=self.REST_HOST,
+            auth_server=auth_server,
             clint_id=client_id,
             redirect_uri=redirect_uri,
             session_option=session_option
