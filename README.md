@@ -31,6 +31,6 @@ Needed to install an update to fix a compatability issue
 
 ## How to Run
 
-NOTE: You may need to configure ports to listen to for serviing up the site
+NOTE: You may need to configure your listening ports when serving the site
 
 `python main.py`
