@@ -10,6 +10,10 @@ This is a simple application on using Okta's OIDC endpoints to access web proper
 * Okta API Token
 
 ## Dependencies
+PIP may have to be run as root:
+
+`sudo pip install ...`
+ 
 You can run all the dependencies via the requirements.txt
 `pip install -r requirements.txt`
 
@@ -30,6 +34,8 @@ Needed to install an update to fix a compatability issue
 `pip install requests --upgrade`
 
 ## How to Run
+
+Edit config.py with your settings. 
 
 NOTE: You may need to configure your listening ports when serving the site
 
